@@ -15,6 +15,7 @@
   button{width:100%;padding:12px;border:0;border-radius:10px;background:#ff8a1c;color:#fff;font-weight:800;font-size:17px;cursor:pointer}
   button:disabled{opacity:.6;cursor:wait}
   .err{color:#ff7b7b;font-size:14px;min-height:20px;margin-top:10px}
+  .ver{color:#6b7591;font-size:11px;margin-top:14px}
 </style></head>
 <body><div class="wrap"><form id="f">
   <h1>SPLAT SQUADS</h1>
@@ -22,10 +23,11 @@
   <input id="pw" type="password" autocomplete="current-password" placeholder="Password" required autofocus>
   <button id="go" type="submit">PLAY</button>
   <div class="err" id="err"></div>
+  <div class="ver">Update Gqe/0q</div>
 </form></div>
 <script>
 (() => {
-  const SALT = "D/C5U1NVgTDeIYj5BLOd1Q==", WRAPPED = "b7P4jPWjnRVBliHeJEsaCuZ5bqUH1eGMOyfd3fr46eJcNpUdlv/NZjweHxLksClLEmfXi6RRI76DtHTM", ITER = 310000;
+  const SALT = "Gqe/0quyCRlyFzo8PSyeAw==", WRAPPED = "t0bdGr7kNpOqaP7rxfuKolnEwEwaqs2uEo/mhWc8vjOxwUtbh9KPeek2me/X6axF9O+uYBnf9yzcPjss", ITER = 310000;
   const STORE = "splat-site-kek", KEY_STORE = "splat-site-key";
   const un = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
   const bs = (u) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
@@ -33,11 +35,14 @@
   const err = document.getElementById("err"), go = document.getElementById("go");
   const gamePromise = fetch("game.bin", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("download"); return r.arrayBuffer(); });
 
+  const fail = (kind) => { const e = new Error(kind); throw e; };
   async function unlock(kekRaw) {
     const kek = await crypto.subtle.importKey("raw", kekRaw, "AES-GCM", false, ["decrypt"]);
-    const raw = await open(kek, un(WRAPPED));
+    // 1) The password opens this page's key. If that fails, the password is wrong.
+    const raw = await open(kek, un(WRAPPED)).catch(() => fail("password"));
     const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
-    const html = new TextDecoder().decode(await open(key, new Uint8Array(await gamePromise)));
+    // 2) That key opens game.bin. If that fails, game.bin is from a different update than this page.
+    const html = new TextDecoder().decode(await open(key, new Uint8Array(await gamePromise)).catch(() => fail("mismatch")));
     const k64 = bs(raw);
     sessionStorage.setItem(KEY_STORE, k64);
     window.__SPLAT_CONTENT_KEY = k64;
@@ -57,7 +62,10 @@
       const kek = await derive(document.getElementById("pw").value);
       await unlock(kek);
     } catch (x) {
-      err.textContent = x && x.message === "download" ? "Couldn't download the game. Check your connection." : "Wrong password.";
+      const m = x && x.message;
+      err.textContent = m === "download" ? "Couldn't download the game. Check your connection."
+        : m === "mismatch" ? "The password is right, but game.bin is from a different update than this page. Upload index.html and game.bin from the same update."
+        : "Wrong password.";
       go.disabled = false; go.textContent = "PLAY";
     }
   });
